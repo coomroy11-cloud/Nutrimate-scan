@@ -1,1 +1,71 @@
 @import "tailwindcss";
+
+/* -------------------------------------------------------------
+ * Global Accessibility: Font Size Scaling
+ * Tailwind CSS uses `rem` units for typography (text-xs, text-sm, etc.).
+ * By dynamically updating root font size, all REM-based classes,
+ * padding, and layout scale smoothly and proportionally across the app.
+ * ------------------------------------------------------------- */
+html.font-normal {
+  font-size: 16px;
+}
+
+html.font-large {
+  font-size: 18.5px;
+}
+
+html.font-large [class*="text-[10px]"] {
+  font-size: 12.5px !important;
+}
+html.font-large [class*="text-[11px]"] {
+  font-size: 13.5px !important;
+}
+html.font-large [class*="text-[12px]"] {
+  font-size: 14.5px !important;
+}
+
+html.font-huge {
+  font-size: 21.5px;
+}
+
+html.font-huge [class*="text-[10px]"] {
+  font-size: 14px !important;
+}
+html.font-huge [class*="text-[11px]"] {
+  font-size: 15px !important;
+}
+html.font-huge [class*="text-[12px]"] {
+  font-size: 16px !important;
+}
+
+/* -------------------------------------------------------------
+ * Elderly Mode (โหมดผู้สูงอายุ): High Contrast & Readability
+ * ------------------------------------------------------------- */
+html.elderly-mode-active body {
+  font-weight: 500;
+}
+
+html.elderly-mode-active p,
+html.elderly-mode-active span,
+html.elderly-mode-active div {
+  text-rendering: optimizeLegibility;
+}
+
+/* Enhanced contrast for muted text */
+html.elderly-mode-active .text-slate-500 {
+  color: #334155 !important; /* darker slate for high contrast */
+}
+html.elderly-mode-active .text-slate-400 {
+  color: #475569 !important; /* clearly visible */
+}
+
+/* Larger, easier touch targets for elderly hands */
+html.elderly-mode-active button,
+html.elderly-mode-active a {
+  min-height: 42px;
+}
+
+/* Clear, high-contrast borders */
+html.elderly-mode-active .border-slate-200 {
+  border-color: #cbd5e1 !important;
+}

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LoginPage } from './components/LoginPage';
 import { Navbar } from './components/Navbar';
 import { BottomNav, TabType } from './components/BottomNav';
 import { ScanTab } from './components/ScanTab';
@@ -7,40 +9,28 @@ import { HealthProfileModal } from './components/HealthProfileModal';
 import { HistoryTab } from './components/HistoryTab';
 import { HelpChatTab } from './components/HelpChatTab';
 import { ScanResultModal } from './components/ScanResultModal';
-import { AuthModal } from './components/AuthModal';
+import { UserProfileModal } from './components/UserProfileModal';
+import { AppIconBadge } from './components/AppLogo';
 import { UserProfile, ScanResult } from './types';
-import { DEMO_PROFILES } from './data/mockData';
+import {
+  subscribeToUserHistory,
+  saveScanToFirestore,
+  deleteScanFromFirestore,
+  clearUserHistoryFromFirestore,
+} from './services/historyService';
 
-const STORAGE_KEY_PROFILE = 'nutrimed_user_profile';
-const STORAGE_KEY_HISTORY = 'nutrimed_scan_history';
+function AppContent() {
+  const {
+    currentUser,
+    userProfile,
+    isAuthLoading,
+    updateUserProfile,
+  } = useAuth();
 
-export default function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('scan');
 
-  // User Profile
-  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PROFILE);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn('Error reading stored profile:', e);
-    }
-    // Default to chronic disease patient persona (Diabetes + Hypertension)
-    return DEMO_PROFILES.chronic;
-  });
-
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
-
-  // Scan History
-  const [history, setHistory] = useState<ScanResult[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn('Error reading stored history:', e);
-    }
-    return [];
-  });
+  // Real-time Scan History tied to authenticated Firebase user
+  const [history, setHistory] = useState<ScanResult[]>([]);
 
   // Current Scanned Product
   const [activeScanResult, setActiveScanResult] = useState<ScanResult | null>(null);
@@ -48,7 +38,7 @@ export default function App() {
 
   // Modals
   const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
 
   // Font Size
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'huge'>(
@@ -57,39 +47,118 @@ export default function App() {
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // Save profile to local storage whenever updated
+  // Sync font size when profile loads
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(userProfile));
-    } catch (e) {
-      console.warn('Failed to save profile to localStorage:', e);
+    if (userProfile.fontSize) {
+      setFontSize(userProfile.fontSize);
     }
-  }, [userProfile]);
+  }, [userProfile.fontSize]);
 
-  // Save history to local storage whenever updated
+  // Subscribe to user's private scan history in Firestore with local cache restore
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
-    } catch (e) {
-      console.warn('Failed to save history to localStorage:', e);
+    if (!currentUser) {
+      console.log('[App] No user logged in. Clearing history state and listeners.');
+      setHistory([]);
+      return;
     }
-  }, [history]);
 
-  // Save Scan Result to History
-  const handleSaveToHistory = (result: ScanResult) => {
+    const userId = currentUser.uid;
+    const cacheKey = `nutrimed_history_${userId}`;
+    console.log('[App] Initializing history for user UID:', userId);
+
+    // 1. Instant restore from local cache for this specific user (prevents empty flicker on refresh)
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log(`[App] Instantly restored ${parsed.length} cached history items for user: ${userId}`);
+          setHistory(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn('[App] Error reading cached history:', e);
+    }
+
+    // 2. Real-time synchronization with Cloud Firestore: users/{userId}/scanHistory
+    const unsubscribe = subscribeToUserHistory(
+      userId,
+      (syncedHistory) => {
+        console.log(`[App] Firestore real-time update: received ${syncedHistory.length} history items for user: ${userId}`);
+        setHistory(syncedHistory);
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(syncedHistory));
+        } catch (e) {
+          console.warn('[App] Error writing to history cache:', e);
+        }
+      },
+      (err) => {
+        console.error('[App] Real-time history sync error:', err);
+      }
+    );
+
+    return () => {
+      console.log(`[App] Cleaning up Firestore history listener for user: ${userId}`);
+      if (unsubscribe) unsubscribe();
+    };
+  }, [currentUser]);
+
+  // Save Scan Result to History (both state and Firestore)
+  const handleSaveToHistory = async (result: ScanResult) => {
     setHistory((prev) => {
       const filtered = prev.filter((item) => item.id !== result.id);
-      return [result, ...filtered];
+      const updated = [result, ...filtered];
+      if (currentUser) {
+        try {
+          localStorage.setItem(`nutrimed_history_${currentUser.uid}`, JSON.stringify(updated));
+        } catch (e) {
+          console.warn('Cache write error:', e);
+        }
+      }
+      return updated;
     });
+
+    if (currentUser) {
+      try {
+        console.log('[App] Saving scan to Firestore for user:', currentUser.uid, 'scanId:', result.id);
+        await saveScanToFirestore(currentUser.uid, result);
+      } catch (err) {
+        console.error('[App] Failed to save scan to Firestore:', err);
+      }
+    }
   };
 
-  const handleDeleteHistoryItem = (id: string) => {
-    setHistory((prev) => prev.filter((item) => item.id !== id));
+  const handleDeleteHistoryItem = async (id: string) => {
+    setHistory((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      if (currentUser) {
+        try {
+          localStorage.setItem(`nutrimed_history_${currentUser.uid}`, JSON.stringify(updated));
+        } catch (e) {
+          console.warn('Cache write error:', e);
+        }
+      }
+      return updated;
+    });
+
+    if (currentUser) {
+      try {
+        await deleteScanFromFirestore(currentUser.uid, id);
+      } catch (err) {
+        console.error('[App] Failed to delete scan from Firestore:', err);
+      }
+    }
   };
 
-  const handleClearHistory = () => {
-    if (confirm('คุณต้องการลบประวัติการสแกนทั้งหมดหรือไม่?')) {
-      setHistory([]);
+  const handleClearHistory = async () => {
+    setHistory([]);
+    if (currentUser) {
+      try {
+        localStorage.removeItem(`nutrimed_history_${currentUser.uid}`);
+        await clearUserHistoryFromFirestore(currentUser.uid);
+      } catch (err) {
+        console.error('[App] Failed to clear history from Firestore:', err);
+      }
     }
   };
 
@@ -108,37 +177,43 @@ export default function App() {
     setCurrentTab('help');
   };
 
-  // Handle Login from Auth Modal
-  const handleLogin = (newProfile: UserProfile) => {
-    setUserProfile(newProfile);
-    setIsLoggedIn(true);
-    if (newProfile.fontSize) {
-      setFontSize(newProfile.fontSize);
-    }
-    // Automatically trigger health profile pop-up right after login!
-    setTimeout(() => {
-      setIsHealthModalOpen(true);
-    }, 250);
-  };
+  // Apply root font size and elderly mode globally across the application
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove('font-normal', 'font-large', 'font-huge');
 
-  const handleLogout = () => {
-    setUserProfile({
-      name: 'ผู้ใช้ทั่วไป',
-      email: '',
-      role: 'ผู้ใช้งานทั่วไป',
-      elderlyMode: false,
-      fontSize: 'normal',
-      diseases: [],
-      allergies: [],
-      medications: [],
-    });
-    setIsLoggedIn(false);
-  };
+    if (fontSize === 'huge') {
+      root.classList.add('font-huge');
+      root.style.fontSize = '21.5px';
+    } else if (fontSize === 'large') {
+      root.classList.add('font-large');
+      root.style.fontSize = '18.5px';
+    } else {
+      root.classList.add('font-normal');
+      root.style.fontSize = '16px';
+    }
+
+    if (userProfile.elderlyMode) {
+      root.classList.add('elderly-mode-active');
+    } else {
+      root.classList.remove('elderly-mode-active');
+    }
+  }, [fontSize, userProfile.elderlyMode]);
 
   // Handle Font Size Change
   const handleFontSizeChange = (size: 'normal' | 'large' | 'huge') => {
     setFontSize(size);
-    setUserProfile((prev) => ({ ...prev, fontSize: size }));
+    updateUserProfile({ fontSize: size });
+  };
+
+  // Handle Quick Elderly Mode Toggle
+  const handleToggleElderlyMode = () => {
+    const nextElderly = !userProfile.elderlyMode;
+    const nextFontSize = nextElderly && fontSize === 'normal' ? 'large' : fontSize;
+    if (nextFontSize !== fontSize) {
+      setFontSize(nextFontSize);
+    }
+    updateUserProfile({ elderlyMode: nextElderly, fontSize: nextFontSize });
   };
 
   // Font size class mapper
@@ -154,6 +229,33 @@ export default function App() {
     }
   };
 
+  // 1. Loading splash screen while checking Firebase Auth state
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
+        <div className="bg-white p-7 rounded-3xl shadow-xl shadow-slate-200/70 border border-emerald-100 flex flex-col items-center max-w-xs text-center space-y-4">
+          <AppIconBadge size="lg" />
+          <div className="flex items-center gap-1.5">
+            <span className="font-extrabold text-lg text-slate-800 tracking-tight">
+              Nutri<span className="text-emerald-600">Med</span>
+            </span>
+            <span className="bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+              Scan AI
+            </span>
+          </div>
+          <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-500 font-medium">กำลังตรวจสอบสถานะการเข้าสู่ระบบ...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Private Route Protection: If not logged in, immediately show LoginPage
+  if (!currentUser) {
+    return <LoginPage />;
+  }
+
+  // 3. User is authenticated: Render main NutriMed Scan AI application
   return (
     <div
       className={`min-h-screen bg-slate-100/90 text-slate-800 ${getFontSizeClass()} flex flex-col selection:bg-emerald-500 selection:text-white`}
@@ -161,9 +263,10 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         userProfile={userProfile}
+        photoURL={currentUser.photoURL}
         onOpenProfile={() => setIsHealthModalOpen(true)}
-        onOpenAuth={() => setIsAuthModalOpen(true)}
-        isLoggedIn={isLoggedIn}
+        onOpenAuth={() => setIsUserProfileModalOpen(true)}
+        isLoggedIn={true}
       />
 
       {/* Main Body Content Container (Mobile-first centered max-w-md) */}
@@ -186,7 +289,6 @@ export default function App() {
         )}
 
         {currentTab === 'health' && (
-          // In health tab, show profile editor directly or open modal
           <div className="space-y-4">
             <div className="bg-white rounded-3xl p-5 border border-emerald-100 shadow-sm">
               <div className="flex items-center justify-between mb-3">
@@ -195,7 +297,7 @@ export default function App() {
                 </h2>
                 <button
                   onClick={() => setIsHealthModalOpen(true)}
-                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs"
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
                 >
                   แก้ไขข้อมูล
                 </button>
@@ -332,18 +434,25 @@ export default function App() {
         profile={userProfile}
         isOpen={isHealthModalOpen}
         onClose={() => setIsHealthModalOpen(false)}
-        onSave={(updated) => setUserProfile(updated)}
+        onSave={(updated) => updateUserProfile(updated)}
       />
 
-      {/* Auth / Demo Login Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onLogin={handleLogin}
-        onLogout={handleLogout}
-        currentProfile={userProfile}
-        isLoggedIn={isLoggedIn}
+      {/* Account / User Profile Modal */}
+      <UserProfileModal
+        isOpen={isUserProfileModalOpen}
+        onClose={() => setIsUserProfileModalOpen(false)}
+        onOpenHealthModal={() => setIsHealthModalOpen(true)}
+        onFontSizeChange={handleFontSizeChange}
+        currentFontSize={fontSize}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

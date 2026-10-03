@@ -170,10 +170,87 @@ export const ScanResultModal: React.FC<ScanResultModalProps> = ({
               </div>
               <button
                 onClick={handleToggleAudio}
-                className="text-xs font-semibold text-emerald-700 underline"
+                className="text-xs font-semibold text-emerald-700 underline cursor-pointer"
               >
                 หยุด
               </button>
+            </div>
+          )}
+
+          {/* ELDERLY MODE: กล่องสรุปพิเศษเข้าใจง่ายสำหรับผู้สูงอายุ */}
+          {elderlyMode && (
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50/70 border-2 border-amber-300 rounded-2xl p-4 space-y-3 shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-center justify-between gap-2 border-b border-amber-200/80 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">👵</span>
+                  <div>
+                    <h4 className="font-extrabold text-sm sm:text-base text-amber-950">
+                      สรุปสำหรับผู้สูงอายุ (เข้าใจง่าย)
+                    </h4>
+                    <p className="text-[11px] text-amber-800">
+                      เน้นข้อความสำคัญ ตัวหนังสือชัดเจน และมีเสียงอ่าน
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleAudio}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer ${
+                    isPlayingAudio
+                      ? 'bg-rose-600 text-white animate-pulse'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
+                >
+                  {isPlayingAudio ? (
+                    <>
+                      <VolumeX className="w-4 h-4" />
+                      <span>หยุด</span>
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="w-4 h-4" />
+                      <span>ฟังเสียงอ่าน</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                {/* 1. สรุปความปลอดภัย */}
+                <div className="bg-white/95 p-3 rounded-xl border border-amber-200">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    ผลประเมินความปลอดภัย
+                  </div>
+                  <div className="text-sm font-extrabold text-slate-900 mt-0.5">
+                    {risk.title}
+                  </div>
+                  <div className="text-xs text-slate-700 mt-1 leading-relaxed">
+                    {result.userFriendlySummary || risk.desc}
+                  </div>
+                </div>
+
+                {/* 2. วิธีรับประทาน/วิธีใช้ */}
+                <div className="bg-white/95 p-3 rounded-xl border border-amber-200">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    วิธีรับประทาน / วิธีใช้
+                  </div>
+                  <div className="text-sm font-extrabold text-slate-900 mt-0.5 leading-relaxed">
+                    {result.directions || 'โปรดสอบถามแพทย์หรือเภสัชกรก่อนใช้'}
+                  </div>
+                </div>
+
+                {/* 3. คำแนะนำพิเศษสำหรับผู้สูงอายุ */}
+                {result.elderlyTips && (
+                  <div className="bg-amber-100/80 p-3 rounded-xl border border-amber-300">
+                    <div className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">
+                      ข้อควรระวังสำหรับผู้สูงวัย
+                    </div>
+                    <div className="text-xs font-bold text-amber-950 mt-0.5 leading-relaxed">
+                      {result.elderlyTips}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

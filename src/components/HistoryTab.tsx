@@ -29,6 +29,8 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   onDeleteOne,
   onStartScan,
 }) => {
+  const [showConfirmClear, setShowConfirmClear] = React.useState(false);
+
   const formatDate = (timestamp: number) => {
     const d = new Date(timestamp);
     return d.toLocaleDateString('th-TH', {
@@ -68,28 +70,56 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   return (
     <div className="space-y-4 pb-20">
       {/* Header Card */}
-      <div className="bg-white rounded-3xl p-5 border border-emerald-100 shadow-sm flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0">
-            <History className="w-5 h-5" />
+      <div className="bg-white rounded-3xl p-5 border border-emerald-100 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0">
+              <History className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">
+                ประวัติการสแกนฉลากยาและอาหาร ({history.length})
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                บันทึกบน Cloud Firestore ผูกกับบัญชีของคุณอย่างปลอดภัย
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-base font-bold text-slate-900 leading-tight">
-              ประวัติการสแกนฉลากยาและอาหาร ({history.length})
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              บันทึกการตรวจสอบไว้ในเครื่องของคุณ เพื่อเรียนรู้ย้อนหลัง
-            </p>
-          </div>
+          {history.length > 0 && !showConfirmClear && (
+            <button
+              onClick={() => setShowConfirmClear(true)}
+              className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition-colors cursor-pointer"
+              title="ล้างประวัติทั้งหมด"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
-        {history.length > 0 && (
-          <button
-            onClick={onClearHistory}
-            className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition-colors"
-            title="ล้างประวัติทั้งหมด"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+
+        {/* Clear History In-App Confirmation */}
+        {showConfirmClear && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-2 animate-in fade-in duration-150">
+            <span className="text-xs font-bold text-rose-800">
+              ลบประวัติทั้งหมด {history.length} รายการ?
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setShowConfirmClear(false)}
+                className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => {
+                  onClearHistory();
+                  setShowConfirmClear(false);
+                }}
+                className="px-2.5 py-1 text-xs font-bold text-white bg-rose-600 rounded-lg hover:bg-rose-700 shadow-2xs cursor-pointer"
+              >
+                ลบทั้งหมด
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

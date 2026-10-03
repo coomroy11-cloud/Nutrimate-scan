@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with personal and health settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "providerId": { "type": "string" },
+        "role": { "type": "string" },
+        "elderlyMode": { "type": "boolean" },
+        "fontSize": { "type": "string" },
+        "age": { "type": "string" },
+        "gender": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "ScanItem": {
+      "title": "ScanItem",
+      "description": "Food or medicine scan history item saved by the user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "productType": { "type": "string" },
+        "productName": { "type": "string" },
+        "brandName": { "type": "string" },
+        "genericName": { "type": "string" },
+        "fdaNumber": { "type": "string" },
+        "riskLevel": { "type": "string" },
+        "riskSummaryText": { "type": "string" },
+        "userFriendlySummary": { "type": "string" },
+        "directions": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "uid", "productName", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User account and health profile settings"
+    },
+    "/users/{userId}/scanHistory/{scanId}": {
+      "schema": { "$ref": "#/entities/ScanItem" },
+      "description": "Private scan history records belonging exclusively to the authenticated user"
+    }
+  }
+}
