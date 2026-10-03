@@ -1,0 +1,11 @@
+{
+  "name": "Remix NutriMed Scan AI",
+  "description": "แอปพลิเคชันผู้ช่วยอัจฉริยะวิเคราะห์ฉลากยา ตรวจสอบส่วนประกอบอาหาร และประเมินความปลอดภัยตามข้อกำหนด อย. (FDA)",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
