@@ -249,6 +249,12 @@ export const ScanTab: React.FC<ScanTabProps> = ({
     setErrorMessage(null);
 
     try {
+      console.log('[NutriMed Scan] Sending scan request to /api/scan-label', {
+        hasImage: !!payload.imageBase64,
+        imageSize: payload.imageBase64?.length || 0,
+        hasRawText: !!payload.rawText,
+      });
+
       const res = await fetch('/api/scan-label', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -258,7 +264,26 @@ export const ScanTab: React.FC<ScanTabProps> = ({
         }),
       });
 
+      console.log('[NutriMed Scan] Received response:', res.status, res.statusText);
+
+      // Check if response is valid JSON (handle 404 / 500 HTML pages gracefully)
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('[NutriMed Scan] Server returned non-JSON response:', {
+          status: res.status,
+          statusText: res.statusText,
+          contentType,
+          snippet: text.slice(0, 300),
+        });
+        throw new Error(
+          `เซิร์ฟเวอร์ส่งการตอบกลับที่ไม่ถูกต้อง (HTTP ${res.status}: ${res.statusText || 'Non-JSON'})`
+        );
+      }
+
       const json = await res.json();
+      console.log('[NutriMed Scan] Response JSON payload:', json);
+
       if (json.success && json.data) {
         const fullResult: ScanResult = {
           ...json.data,
@@ -271,15 +296,22 @@ export const ScanTab: React.FC<ScanTabProps> = ({
         setQualityReport(null);
         onScanComplete(fullResult);
       } else {
+        console.warn('[NutriMed Scan] API error returned:', json.error);
         setErrorMessage(
           json.error ||
             'ไม่สามารถวิเคราะห์ฉลากได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง หรือถ่ายภาพใหม่ในมุมที่ชัดเจนขึ้น'
         );
       }
     } catch (err: any) {
-      console.error('Scan failed:', err);
+      console.error('[NutriMed Scan] Scan request failed:', {
+        message: err.message,
+        stack: err.stack,
+        endpoint: '/api/scan-label',
+      });
       setErrorMessage(
-        'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์ กรุณาตรวจสอบอินเทอร์เน็ตและลองใหม่อีกครั้ง'
+        err.message?.includes('HTTP')
+          ? `เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์ (${err.message}) กรุณาลองใหม่อีกครั้ง`
+          : 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์ กรุณาตรวจสอบอินเทอร์เน็ตและลองใหม่อีกครั้ง'
       );
     } finally {
       setIsLoading(false);

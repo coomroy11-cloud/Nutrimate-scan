@@ -60,13 +60,17 @@ const fallbackServerTTS = async (
   onError?: () => void
 ) => {
   try {
+    console.log('[Audio TTS] Requesting audio from /api/tts');
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: text.slice(0, 300) }),
     });
 
-    if (!res.ok) throw new Error('TTS server failed');
+    if (!res.ok) {
+      console.warn('[Audio TTS] /api/tts returned non-ok status:', res.status);
+      throw new Error(`TTS server failed with status ${res.status}`);
+    }
 
     const data = await res.json();
     if (data.audioBase64) {

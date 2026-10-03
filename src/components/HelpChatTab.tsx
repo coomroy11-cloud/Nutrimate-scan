@@ -65,6 +65,7 @@ export const HelpChatTab: React.FC<HelpChatTabProps> = ({
     setIsSending(true);
 
     try {
+      console.log('[HelpChatTab] Sending message to /api/chat-fda');
       const res = await fetch('/api/chat-fda', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,6 +76,20 @@ export const HelpChatTab: React.FC<HelpChatTabProps> = ({
         }),
       });
 
+      console.log('[HelpChatTab] Response status:', res.status, res.statusText);
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('[HelpChatTab] Server returned non-JSON:', {
+          status: res.status,
+          statusText: res.statusText,
+          contentType,
+          snippet: text.slice(0, 300),
+        });
+        throw new Error(`HTTP ${res.status}: Non-JSON response`);
+      }
+
       const data = await res.json();
       const botMsg: ChatMessage = {
         id: `bot-${Date.now()}`,
@@ -84,8 +99,11 @@ export const HelpChatTab: React.FC<HelpChatTabProps> = ({
       };
 
       setMessages((prev) => [...prev, botMsg]);
-    } catch (err) {
-      console.error('Chat error:', err);
+    } catch (err: any) {
+      console.error('[HelpChatTab] Chat error:', {
+        message: err.message,
+        endpoint: '/api/chat-fda',
+      });
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
         role: 'assistant',

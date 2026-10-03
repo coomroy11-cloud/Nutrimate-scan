@@ -84,11 +84,33 @@ export const FDACheckerTab: React.FC<FDACheckerTabProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCheck = (codeToCheck?: string) => {
+  const handleCheck = async (codeToCheck?: string) => {
     const code = codeToCheck !== undefined ? codeToCheck : inputCode;
     if (!code.trim()) return;
-    const res = checkFDAFormat(code);
-    setResult(res);
+    // Immediate client-side evaluation
+    const localRes = checkFDAFormat(code);
+    setResult(localRes);
+
+    // Server-side verification via /api/check-fda-format
+    try {
+      console.log('[FDACheckerTab] Verifying code via /api/check-fda-format:', code);
+      const res = await fetch('/api/check-fda-format', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        console.log('[FDACheckerTab] Server verified code result:', data);
+        if (data && typeof data.isValid === 'boolean') {
+          setResult(data);
+        }
+      } else {
+        console.warn('[FDACheckerTab] Server check responded with status:', res.status);
+      }
+    } catch (err) {
+      console.warn('[FDACheckerTab] Server check fallback to client check:', err);
+    }
   };
 
   const handleTestExample = (exampleCode: string) => {
@@ -130,6 +152,7 @@ export const FDACheckerTab: React.FC<FDACheckerTabProps> = ({
     setScanError(null);
 
     try {
+      console.log('[FDACheckerTab] Sending scan request to /api/scan-label');
       const res = await fetch('/api/scan-label', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -140,7 +163,23 @@ export const FDACheckerTab: React.FC<FDACheckerTabProps> = ({
         }),
       });
 
+      console.log('[FDACheckerTab] Response status:', res.status, res.statusText);
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('[FDACheckerTab] Server returned non-JSON:', {
+          status: res.status,
+          statusText: res.statusText,
+          contentType,
+          snippet: text.slice(0, 300),
+        });
+        throw new Error(`เซิร์ฟเวอร์ส่งการตอบกลับที่ไม่ถูกต้อง (HTTP ${res.status}: ${res.statusText || 'Non-JSON'})`);
+      }
+
       const json = await res.json();
+      console.log('[FDACheckerTab] Response JSON:', json);
+
       if (json.success && json.data) {
         const fullResult: ScanResult = {
           ...json.data,
@@ -154,11 +193,20 @@ export const FDACheckerTab: React.FC<FDACheckerTabProps> = ({
           onScanComplete(fullResult);
         }
       } else {
+        console.warn('[FDACheckerTab] API error:', json.error);
         setScanError(json.error || 'ไม่สามารถวิเคราะห์ฉลากได้ กรุณาลองใหม่อีกครั้ง');
       }
     } catch (err: any) {
-      console.error('FDA Scan failed:', err);
-      setScanError('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง');
+      console.error('[FDACheckerTab] FDA Scan failed:', {
+        message: err.message,
+        stack: err.stack,
+        endpoint: '/api/scan-label',
+      });
+      setScanError(
+        err.message?.includes('HTTP')
+          ? `เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์ (${err.message}) กรุณาลองใหม่อีกครั้ง`
+          : 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง'
+      );
     } finally {
       setIsScanning(false);
     }

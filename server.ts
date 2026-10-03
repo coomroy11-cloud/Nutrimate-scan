@@ -12,6 +12,17 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Enable CORS for Vercel and cross-origin requests
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
@@ -150,7 +161,7 @@ function validateDrugReg(text: string): { isValid: boolean; explanation: string;
 }
 
 // 1. API: Check FDA Format
-app.post('/api/check-fda-format', (req, res) => {
+app.post(['/api/check-fda-format', '/check-fda-format'], (req, res) => {
   try {
     const { code } = req.body;
     if (!code || typeof code !== 'string') {
@@ -219,7 +230,7 @@ function extractCleanJson(rawText: string): any {
 }
 
 // 2. API: Scan Food/Drug Label with Gemini Multimodal
-app.post('/api/scan-label', async (req, res) => {
+app.post(['/api/scan-label', '/scan-label'], async (req, res) => {
   try {
     const { imageBase64, mimeType = 'image/jpeg', rawText, userProfile } = req.body;
 
@@ -449,7 +460,7 @@ ${userProfileText}
 });
 
 // 3. API: Chat with FDA 1556 AI Consultant
-app.post('/api/chat-fda', async (req, res) => {
+app.post(['/api/chat-fda', '/chat-fda'], async (req, res) => {
   try {
     const { messages, currentScan, userProfile } = req.body;
 
@@ -508,7 +519,7 @@ ${contextParts.join('\n')}
 });
 
 // 4. API: TTS Voice output using Gemini TTS
-app.post('/api/tts', async (req, res) => {
+app.post(['/api/tts', '/tts'], async (req, res) => {
   try {
     const { text } = req.body;
     if (!text || typeof text !== 'string') {
@@ -576,4 +587,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// Only start standalone HTTP server when not in serverless environment (e.g. Vercel)
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export { app };
+export default app;
